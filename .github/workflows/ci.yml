@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[dev]"
+      - run: python -m compileall -q firestore_backup tests
+      - run: pytest -q
+
+  package:
+    name: Package build + clean-wheel smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[dev]"
+      - run: python -m build
+      - name: Install wheel without Firestore dependency and run phase-2 smoke
+        shell: bash
+        run: |
+          python -m venv /tmp/firestore-backup-wheel
+          /tmp/firestore-backup-wheel/bin/pip install --no-deps dist/*.whl
+          /tmp/firestore-backup-wheel/bin/firestore-backup --version
+          printf '{"collections":{"demo":{"path":"demo","documents":[{"id":"one","path":"demo/one","data":{"value":1}}]}}}\n' > /tmp/minimal.json
+          /tmp/firestore-backup-wheel/bin/firestore-backup sql /tmp/minimal.json -o /tmp/minimal.sql --dialect sqlite
+
+  platforms:
+    name: ${{ matrix.os }} / Python 3.13
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[dev]"
+      - run: pytest -q
+
+  sql-engines:
+    name: Real PostgreSQL + MySQL execution
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: firestore_backup_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d firestore_backup_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: test
+          MYSQL_DATABASE: firestore_backup_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -ptest --silent"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[dev]"
+      - name: Install database clients
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client default-mysql-client
+      - name: Build synthetic dump and SQL
+        run: |
+          python tests/make_fixture_dump.py /tmp/firestore-dump.json
+          firestore-backup sql /tmp/firestore-dump.json -o /tmp/postgres.sql --dialect postgres --drop
+          firestore-backup sql /tmp/firestore-dump.json -o /tmp/mysql.sql --dialect mysql --drop
+      - name: Execute PostgreSQL SQL
+        env:
+          PGPASSWORD: test
+        run: |
+          psql -h 127.0.0.1 -U postgres -d firestore_backup_test -v ON_ERROR_STOP=1 -f /tmp/postgres.sql
+          ORDERS="$(psql -h 127.0.0.1 -U postgres -d firestore_backup_test -Atc "SELECT COUNT(*) FROM users__orders;")"
+          LONG_TEXT="$(psql -h 127.0.0.1 -U postgres -d firestore_backup_test -Atc "SELECT char_length(text) FROM limits WHERE _id='long-text';")"
+          test "$ORDERS" = "3"
+          test "$LONG_TEXT" = "70000"
+      - name: Execute MySQL SQL
+        env:
+          MYSQL_PWD: test
+        run: |
+          mysql --protocol=TCP -h 127.0.0.1 -uroot firestore_backup_test < /tmp/mysql.sql
+          ORDERS="$(mysql --protocol=TCP -h 127.0.0.1 -uroot -N firestore_backup_test -e "SELECT COUNT(*) FROM users__orders;")"
+          LONG_TEXT="$(mysql --protocol=TCP -h 127.0.0.1 -uroot -N firestore_backup_test -e "SELECT CHAR_LENGTH(text) FROM limits WHERE _id='long-text';")"
+          test "$ORDERS" = "3"
+          test "$LONG_TEXT" = "70000"

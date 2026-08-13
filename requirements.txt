@@ -1,0 +1,3 @@
+# Phase 1 dependency. Version 2.22.0 introduced the read_time support used by
+# --snapshot / --read-time. The JSON -> SQL modules themselves use stdlib only.
+google-cloud-firestore>=2.22.0,<3

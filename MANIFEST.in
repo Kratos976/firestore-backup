@@ -1,0 +1,11 @@
+include LICENSE
+include NOTICE
+include README.md
+include README.it.md
+include CHANGELOG.md
+include SECURITY.md
+include CONTRIBUTING.md
+include requirements.txt
+recursive-include tests *.py
+
+include RELEASING.md

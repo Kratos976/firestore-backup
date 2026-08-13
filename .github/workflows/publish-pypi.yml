@@ -1,0 +1,46 @@
+name: Publish to PyPI
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to publish, e.g. v1.0.0"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[dev]"
+      - name: Re-test selected tag
+        run: |
+          python -m compileall -q firestore_backup tests
+          pytest -q
+      - name: Verify requested tag matches package version
+        shell: bash
+        run: |
+          PACKAGE_VERSION="$(python -c 'import firestore_backup; print(firestore_backup.__version__)')"
+          test "${{ inputs.tag }}" = "v${PACKAGE_VERSION}"
+      - name: Verify GitHub Release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release view "${{ inputs.tag }}" --repo "$GITHUB_REPOSITORY"
+      - run: python -m build
+      - name: Publish with PyPI Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@release/v1

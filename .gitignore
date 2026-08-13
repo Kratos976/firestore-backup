@@ -1,0 +1,85 @@
+# ---------------------------------------------------------------------------
+# Secrets / credentials. Never commit these.
+# ---------------------------------------------------------------------------
+*serviceAccount*.json
+*service-account*.json
+*service_account*.json
+*-firebase-adminsdk-*.json
+*credentials*.json
+credentials/
+secrets/
+.secrets/
+keys/
+key.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# ---------------------------------------------------------------------------
+# Dumps, generated SQL and local databases. These may contain production data.
+# Prefer writing exports under out/ or backups/.
+# ---------------------------------------------------------------------------
+out/
+output/
+exports/
+backups/
+backup/
+
+*.sql
+*.ndjson
+*.jsonl
+dump*.json
+*-dump.json
+backup*.json
+probe*.json
+
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files created by atomic output writes
+.*.tmp
+*.tmp
+
+# Local workspace
+local/
+
+# ---------------------------------------------------------------------------
+# Python / packaging / test tooling
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# ---------------------------------------------------------------------------
+# Editors / OS
+# ---------------------------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+Desktop.ini
