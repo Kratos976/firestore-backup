@@ -33,7 +33,47 @@ jobs:
         run: |
           PACKAGE_VERSION="$(python -c 'import firestore_backup; print(firestore_backup.__version__)')"
           test "${GITHUB_REF_NAME}" = "v${PACKAGE_VERSION}"
-      - name: Create GitHub Release
+      - name: Create draft, attach artifacts, then publish
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" dist/* --verify-tag --generate-notes --title "${GITHUB_REF_NAME}"
+        run: |
+          set -euo pipefail
+
+          TAG="${GITHUB_REF_NAME}"
+          REPO="${GITHUB_REPOSITORY}"
+
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            IS_DRAFT="$(gh release view "$TAG" --repo "$REPO" --json isDraft --jq '.isDraft')"
+
+            if [ "$IS_DRAFT" != "true" ]; then
+              ACTUAL_ASSETS="$(gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name')"
+              MISSING=0
+
+              for FILE in dist/*; do
+                NAME="$(basename "$FILE")"
+                if ! grep -Fxq "$NAME" <<<"$ACTUAL_ASSETS"; then
+                  echo "::error::Published release $TAG already exists but is missing asset: $NAME"
+                  MISSING=1
+                fi
+              done
+
+              if [ "$MISSING" -ne 0 ]; then
+                echo "::error::Published immutable releases cannot receive missing assets. Create releases only through this workflow."
+                exit 1
+              fi
+
+              echo "Release $TAG is already published with all expected artifacts."
+              exit 0
+            fi
+          else
+            gh release create "$TAG" \
+              --repo "$REPO" \
+              --verify-tag \
+              --generate-notes \
+              --title "$TAG" \
+              --draft
+          fi
+
+          gh release upload "$TAG" dist/* --repo "$REPO" --clobber
+          gh release edit "$TAG" --repo "$REPO" --draft=false
