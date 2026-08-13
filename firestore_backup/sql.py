@@ -267,7 +267,6 @@ def render(dialect: Dialect, kind: str, value: Any) -> str:
 
 
 
-
 def _derived_identifier(base: str, limit: int) -> str:
     """Keep generated index/constraint names deterministic and collision-safe."""
     if len(base) <= limit:
@@ -296,7 +295,8 @@ def create_table(dialect: Dialect, table: Table) -> str:
         lines.append(f"  PRIMARY KEY ({q('_parent_pk')}, {q('_idx')})")
 
     exists = "IF NOT EXISTS " if dialect.supports_table_if_not_exists else ""
-    return f"CREATE TABLE {exists}{q(table.sql_name)} (\n{',\n'.join(lines)}\n);"
+    columns_sql = ",\n".join(lines)
+    return f"CREATE TABLE {exists}{q(table.sql_name)} (\n{columns_sql}\n);"
 
 
 def drop_table(dialect: Dialect, table: Table) -> str:
