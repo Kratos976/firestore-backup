@@ -8,6 +8,10 @@ updates:
       time: "08:00"
       timezone: "Europe/Rome"
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
     groups:
       python-minor-patch:
         patterns:
@@ -24,6 +28,10 @@ updates:
       time: "08:00"
       timezone: "Europe/Rome"
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
     groups:
       actions-minor-patch:
         patterns:
